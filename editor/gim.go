@@ -2,6 +2,8 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"log"
 	"os"
 
@@ -12,87 +14,111 @@ type Vec2 struct {
 	x, y int
 }
 
-var (
-	g_cursor_pos    = Vec2{0, 0}
-	g_default_style = tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
-)
-
-// Find the position of the last character on a 'line'.
-func find_last_char(screen tcell.Screen, line int) (x int) {
-	screen_width, _ := screen.Size()
-	for i := screen_width - 1; i > 0; i-- {
-		char, _, _, _ := screen.GetContent(i, line)
-
-		if char != ' ' {
-			// I return i + 1 here because screen.GetContent
-			// doesn't return '\n' as characters.
-			return i + 1
-		}
-	}
-	return 0
+type EditorState struct {
+	cursor        Vec2
+	default_style tcell.Style
+	screen        tcell.Screen
+	filename      string
+	actions       []Action
+	text          []string
 }
 
-// Erases the word behind the cursor.
-func erase_prev_word(screen tcell.Screen) {
-	word_start := g_cursor_pos.x
-	// Find the start of the word
-	for ; word_start >= 0; word_start-- {
-		char, _, _, _ := screen.GetContent(word_start, g_cursor_pos.y)
+var g_last_key_pressed tcell.Key
 
-		if char != ' ' {
-			break
-		}
+func add_action(state *EditorState, action Action) {
+	state.actions = append(state.actions, action)
+}
 
-		move_back_cursor(screen)
-	}
-
-	for i := word_start; i >= 0; i-- {
-		char, _, _, _ := screen.GetContent(i, g_cursor_pos.y)
-
-		if char == ' ' {
-			break
-		}
-
-		putchar_at_cursor(screen, ' ')
-		move_back_cursor(screen)
+func execute_actions(state *EditorState) {
+	for _, action := range state.actions {
+		action.execute(state)
+		state.actions = state.actions[1:]
 	}
 }
 
-// Process events.
-func handle_events(screen tcell.Screen) {
-	event := screen.PollEvent()
+func show_text(state *EditorState) {
+	for y := range state.text {
+		for x, r := range state.text[y] {
+			PutChar(state.screen, x, y, state.default_style, r)
+		}
+	}
+}
+
+func handle_events(state *EditorState) {
+	event := state.screen.PollEvent()
 
 	switch event := event.(type) {
 	case *tcell.EventResize:
-		screen.Sync()
+		state.screen.Sync()
 	case *tcell.EventKey:
 		switch event.Key() {
-		case tcell.KeyESC: // Close the editor
-			screen.Fini()
-			os.Exit(0)
-		case tcell.KeyBackspace2: // Erase characters
+		case tcell.KeyESC:
+			add_action(state, CloseEditorAction{})
+		case tcell.KeyBackspace2:
 			if event.Modifiers() == tcell.ModAlt {
-				erase_prev_word(screen)
+				add_action(state, EraseWordAction{})
 			} else {
-				move_back_cursor(screen)
-				putchar_at_cursor(screen, ' ')
+				add_action(state, EraseCharAction{})
 			}
-		case tcell.KeyEnter: // Move the cursor to the next line
-			move_down_cursor(screen)
-			g_cursor_pos.x = 0
-		case tcell.KeyRight: // Move the cursor
-			move_right_cursor(screen)
+		case tcell.KeyEnter:
+			add_action(state, NewLineAction{})
+		case tcell.KeyRight:
+			add_action(state, MoveCursorAction{MoveRight})
 		case tcell.KeyLeft:
-			move_back_cursor(screen)
+			add_action(state, MoveCursorAction{MoveLeft})
 		case tcell.KeyUp:
-			move_up_cursor(screen)
+			add_action(state, MoveCursorAction{MoveUp})
 		case tcell.KeyDown:
-			move_down_cursor(screen)
-		default: // Enter text
-			putchar_at_cursor(screen, event.Rune())
-			move_right_cursor(screen)
+			add_action(state, MoveCursorAction{MoveDown})
+		case tcell.KeyCtrlZ:
+			if g_last_key_pressed == tcell.KeyCtrlZ {
+				add_action(state, SaveAndCloseEditorAction{})
+			}
+		default:
+			add_action(state, EnterCharAction{event.Rune()})
+		}
+		g_last_key_pressed = event.Key()
+	}
+}
+
+func parse_args(state *EditorState) {
+	switch len(os.Args) {
+	case 1:
+		fmt.Printf("usage: gim <filename>\n")
+		exit(0, state.screen)
+	case 2:
+		state.filename = os.Args[1]
+		state.text = read_file(state.filename)
+	default:
+		state.filename = os.Args[1]
+		state.text = read_file(state.filename)
+		fmt.Println("Warning: too many arguments.")
+	}
+}
+
+func read_file(filename string) []string {
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	reader := bufio.NewReader(file)
+
+	text := make([]string, 0)
+	for {
+		line, err := reader.ReadString('\n')
+		text = append(text, line)
+		if err != nil { // EOF
+			log.Print(err)
+			file.Close()
+			return text
 		}
 	}
+}
+
+func exit(code int, screen tcell.Screen) {
+	screen.Fini()
+	os.Exit(code)
 }
 
 func main() {
@@ -105,7 +131,16 @@ func main() {
 		log.Fatalf("%+v", err)
 	}
 
-	screen.SetStyle(g_default_style)
+	state := EditorState{
+		default_style: tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset),
+		screen:        screen,
+		actions:       make([]Action, 0),
+		text:          make([]string, 0),
+	}
+
+	parse_args(&state)
+
+	screen.SetStyle(state.default_style)
 	screen.EnableMouse()
 	screen.EnablePaste()
 	screen.ShowCursor(0, 0)
@@ -113,9 +148,12 @@ func main() {
 	screen.Clear()
 
 	for {
-		handle_events(screen)
-		update_cursor(screen)
-
+		screen.Clear()
+		show_text(&state)
 		screen.Show()
+
+		handle_events(&state)
+		execute_actions(&state)
+		update_cursor(&state)
 	}
 }
