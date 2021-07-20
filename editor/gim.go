@@ -21,9 +21,8 @@ type EditorState struct {
 	filename      string
 	actions       []Action
 	text          []string
+	upper_bound   int // The line from which to start drawing text
 }
-
-var g_last_key_pressed tcell.Key
 
 func add_action(state *EditorState, action Action) {
 	state.actions = append(state.actions, action)
@@ -36,13 +35,17 @@ func execute_actions(state *EditorState) {
 	}
 }
 
+// Draws the recorded text to the screen,
+// starting from the line number `upper_bound`
 func show_text(state *EditorState) {
-	for y := range state.text {
-		for x, r := range state.text[y] {
+	for y := range state.text[state.upper_bound:] {
+		for x, r := range state.text[y+state.upper_bound] {
 			PutChar(state.screen, x, y, state.default_style, r)
 		}
 	}
 }
+
+var g_last_key_pressed tcell.Key
 
 func handle_events(state *EditorState) {
 	event := state.screen.PollEvent()
@@ -136,6 +139,7 @@ func main() {
 		screen:        screen,
 		actions:       make([]Action, 0),
 		text:          make([]string, 0),
+		upper_bound:   0,
 	}
 
 	parse_args(&state)

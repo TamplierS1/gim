@@ -20,7 +20,7 @@ type EraseCharAction struct{}
 
 func (action EraseCharAction) execute(state *EditorState) {
 	move_back_cursor(state)
-	putchar_at_cursor(state, ' ')
+	// putchar_at_cursor(state, ' ')
 	remove_symbol(state, state.cursor)
 }
 
@@ -61,7 +61,7 @@ func (action MoveCursorAction) execute(state *EditorState) {
 	case MoveDown:
 		move_down_cursor(state)
 	case MoveUp:
-		move_up_cursor(&state.cursor)
+		move_up_cursor(state)
 	}
 }
 
@@ -72,7 +72,7 @@ type EnterCharAction struct {
 func (action EnterCharAction) execute(state *EditorState) {
 	record_rune(state, state.cursor, action.r)
 
-	putchar_at_cursor(state, action.r)
+	// putchar_at_cursor(state, action.r)
 	move_right_cursor(state)
 }
 
