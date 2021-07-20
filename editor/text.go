@@ -1,22 +1,52 @@
 package main
 
-import (
-	"github.com/gdamore/tcell/v2"
-)
-
 // Find the position of the last character on a 'line'.
-func find_last_char(screen tcell.Screen, line int) (x int) {
-	screen_width, _ := screen.Size()
-	for i := screen_width - 1; i > 0; i-- {
-		char, _, _, _ := screen.GetContent(i, line)
-
-		if char != ' ' {
-			// I return i + 1 here because screen.GetContent
-			// doesn't return '\n' as characters.
-			return i + 1
+func find_last_char(state *EditorState, line int) int {
+	for x := len(state.text[line]) - 1; x > 0; x-- {
+		if state.text[line][x] != ' ' {
+			return x
 		}
+
 	}
 	return 0
+}
+
+// Find the position of the first character on a 'line'.
+func find_first_char(state *EditorState, line int) int {
+	for x := range state.text[line] {
+		if state.text[line][x] != ' ' {
+			return x
+		}
+	}
+
+	return 0
+}
+
+// Find the position of the next character starting from `start_from`
+func find_next_char(state *EditorState, start_from Vec2) (pos Vec2, e error) {
+	// The search starts from the beginning of the line
+	// except for the first line.
+	is_first_line := true
+
+	for y := range state.text[start_from.y:] {
+		for x := range state.text[y+start_from.y] {
+			if is_first_line {
+				x = start_from.x + x
+			}
+
+			if x >= len(state.text[y+start_from.y]) {
+				break
+			}
+
+			r := state.text[y+start_from.y][x]
+			if r != ' ' && r != '\n' {
+				return Vec2{x, y + start_from.y}, nil
+			}
+		}
+		is_first_line = false
+	}
+
+	return Vec2{-1, -1}, Error{"Error: failed to find the next char."}
 }
 
 // Erases the word behind the cursor.
@@ -41,7 +71,7 @@ func erase_prev_word(state *EditorState) {
 			break
 		}
 
-		putchar_at_cursor(state, ' ')
+		// putchar_at_cursor(state, ' ')
 		remove_symbol(state, state.cursor)
 		move_back_cursor(state)
 	}
@@ -75,9 +105,9 @@ func remove_symbol(state *EditorState, pos Vec2) (e error) {
 }
 
 // Set a cell at the cursor's position to 'char'
-func putchar_at_cursor(state *EditorState, char rune) {
-	PutChar(state.screen, state.cursor.x, state.cursor.y, state.default_style, char)
-}
+// func putchar_at_cursor(state *EditorState, char rune) {
+// 	PutChar(state.screen, state.cursor.x, state.cursor.y, state.default_style, char)
+// }
 
 // Moves all characters on line 'num' one cell to the right
 // starting from 'index' on the screen
