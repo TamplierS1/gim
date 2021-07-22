@@ -20,7 +20,6 @@ type EraseCharAction struct{}
 
 func (action EraseCharAction) execute(state *EditorState) {
 	move_back_cursor(state)
-	// putchar_at_cursor(state, ' ')
 	remove_symbol(state, state.cursor)
 }
 
@@ -33,7 +32,18 @@ func (action EraseWordAction) execute(state *EditorState) {
 type NewLineAction struct{}
 
 func (action NewLineAction) execute(state *EditorState) {
-	record_rune(state, state.cursor, '\n')
+	pos := state.cursor
+
+	state.text = append(state.text, "")
+	// Shift the elements to the right.
+	copy(state.text[pos.y+2:], state.text[pos.y+1:])
+	state.text[pos.y+1] = "\n"
+
+	// Create a line break by moving all the characters, that
+	// are to the right of it, down one line.
+	state.text[pos.y+1] = state.text[pos.y][pos.x:] + state.text[pos.y+1]
+	state.text[pos.y] = state.text[pos.y][:pos.x]
+	record_rune(state, pos, '\n')
 
 	move_down_cursor(state)
 	state.cursor.x = 0
@@ -72,7 +82,6 @@ type EnterCharAction struct {
 func (action EnterCharAction) execute(state *EditorState) {
 	record_rune(state, state.cursor, action.r)
 
-	// putchar_at_cursor(state, action.r)
 	move_right_cursor(state)
 }
 
