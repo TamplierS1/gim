@@ -22,7 +22,7 @@ func scroll_up(state *EditorState) {
 
 // Move the cursor 1 cell to the right
 func move_right_cursor(state *EditorState) {
-	if state.cursor.x+1 >= len(state.text[state.cursor.y]) {
+	if state.cursor.x >= len(state.text[state.cursor.y]) {
 		old_pos := state.cursor
 
 		var e error
@@ -86,6 +86,12 @@ func move_up_cursor(state *EditorState) {
 
 // Move the cursor one cell down.
 func move_down_cursor(state *EditorState) {
+	// Restrict cursor from going beyond existing characters.
+	if state.upper_bound+state.cursor.y >= len(state.text) {
+		return
+	}
+
+	// Restrict cursor from exiting the screen.
 	_, screen_y := state.screen.Size()
 	if state.cursor.y >= screen_y {
 		scroll_down(state)
@@ -97,6 +103,7 @@ func move_down_cursor(state *EditorState) {
 		state.text[state.cursor.y+1][state.cursor.x] == ' ' {
 		state.cursor.x = find_first_char(state, state.cursor.y+1)
 	}
+
 	state.cursor.y++
 }
 

@@ -21,7 +21,9 @@ type EditorState struct {
 	filename      string
 	actions       []Action
 	text          []string
-	upper_bound   int // The line from which to start drawing text
+	// The line from which to start drawing text,
+	// it's needed for scrolling.
+	upper_bound int
 }
 
 func add_action(state *EditorState, action Action) {
@@ -91,18 +93,21 @@ func parse_args(state *EditorState) {
 		exit(0, state.screen)
 	case 2:
 		state.filename = os.Args[1]
-		state.text = read_file(state.filename)
+		state.text = read_file(state.filename, state.screen)
 	default:
 		state.filename = os.Args[1]
-		state.text = read_file(state.filename)
+		state.text = read_file(state.filename, state.screen)
 		fmt.Println("Warning: too many arguments.")
 	}
 }
 
-func read_file(filename string) []string {
+func read_file(filename string, screen tcell.Screen) []string {
 	file, err := os.Open(filename)
 	if err != nil {
-		log.Fatal(err)
+		file, err = os.Create(filename)
+		if err != nil {
+			fatal_exit(1, screen, err)
+		}
 	}
 
 	reader := bufio.NewReader(file)
@@ -112,11 +117,17 @@ func read_file(filename string) []string {
 		line, err := reader.ReadString('\n')
 		text = append(text, line)
 		if err != nil { // EOF
-			log.Print(err)
+			// log.Print(err)
 			file.Close()
 			return text
 		}
 	}
+}
+
+func fatal_exit(code int, screen tcell.Screen, err error) {
+	screen.Fini()
+	log.Fatal(err)
+	os.Exit(code)
 }
 
 func exit(code int, screen tcell.Screen) {
@@ -153,11 +164,13 @@ func main() {
 
 	for {
 		screen.Clear()
-		show_text(&state)
-		screen.Show()
 
 		handle_events(&state)
 		execute_actions(&state)
 		update_cursor(&state)
+
+		show_text(&state)
+		screen.Show()
+
 	}
 }

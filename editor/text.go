@@ -100,28 +100,26 @@ func remove_symbol(state *EditorState, pos Vec2) (e error) {
 			"\n"}
 	}
 
-	state.text[pos.y] = state.text[pos.y][:pos.x] + state.text[pos.y][pos.x+1:]
+	// Can't remove the beginning of the file
+	if pos.x <= 0 && pos.y <= 0 {
+		state.text[0] = state.text[0][1:]
+		return
+	}
+
+	// If the user deletes a line.
+	if state.text[pos.y][pos.x] == '\n' {
+		// Copy the contents of the previous line (excluding the '\n')
+		if state.text[pos.y+1][0] == '\n' {
+			state.text[pos.y] += state.text[pos.y+1][1:]
+		} else {
+			state.text[pos.y] += state.text[pos.y+1]
+		}
+
+		// Remove the deleted line.
+		state.text = append(state.text[:pos.y+1], state.text[pos.y+2:]...)
+	} else {
+		state.text[pos.y] = state.text[pos.y][:pos.x] + state.text[pos.y][pos.x+1:]
+	}
+
 	return nil
 }
-
-// Set a cell at the cursor's position to 'char'
-// func putchar_at_cursor(state *EditorState, char rune) {
-// 	PutChar(state.screen, state.cursor.x, state.cursor.y, state.default_style, char)
-// }
-
-// Moves all characters on line 'num' one cell to the right
-// starting from 'index' on the screen
-// func shift_line_to_right(state *EditorState) (e error) {
-// 	prev_rune := ' '
-// 	for i, r := range state.text[state.cursor.y][state.cursor.x:] {
-// 		pos := Vec2{state.cursor.x + i, state.cursor.y}
-// 		putchar_at(state, pos, prev_rune)
-// 		prev_rune = r
-// 	}
-// 	return nil
-// }
-
-// Set a cell at the position 'pos' to 'char'
-// func putchar_at(state *EditorState, pos Vec2, char rune) {
-// 	PutChar(state.screen, pos.x, pos.y, state.default_style, char)
-// }
